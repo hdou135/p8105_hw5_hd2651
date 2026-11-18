@@ -1,0 +1,18 @@
+---
+title: "p8105 Homework5"
+author: "Haoyuan Dou"
+date: "2026-11-18"
+output: github_document
+---
+
+# Problem 1
+
+
+
+# Problem 2
+
+
+
+# Problem 3
+
+
