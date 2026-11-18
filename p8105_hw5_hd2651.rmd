@@ -1,18 +1,219 @@
 ---
-title: "p8105 Homework5"
+title: "P8105 Homework 5"
 author: "Haoyuan Dou"
 date: "2026-11-18"
 output: github_document
 ---
 
 # Problem 1
+```{r}
+library(tidyverse)
+set.seed(1)
+```
 
+```{r}
+birthday_shared = function(n) {
+  birthdays = sample(1:365, size = n, replace = TRUE)
+  n_distinct(birthdays) < n
+}
 
+birthday_shared(2)
+birthday_shared(30)
+```
+```{r}
+birthday_results = 
+  expand_grid(
+    group_size = 2:50,
+    iter = 1:10000
+  ) |>
+  mutate(
+    shared = map_lgl(group_size, birthday_shared)
+  ) |>
+  group_by(group_size) |>
+  summarize(
+    probability = mean(shared)
+  )
+
+birthday_results
+```
+
+```{r}
+birthday_results |>
+  ggplot(aes(x = group_size, y = probability)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Probability of Shared Birthdays",
+    x = "Group Size",
+    y = "Probability"
+  ) +
+  theme_minimal()
+```
+
+The probability of at least two people sharing a birthday increases as the group gets bigger. It is a little over 50% with 23 people and about 97% with 50 people.
 
 # Problem 2
+```{r}
+list.files("data/data/")
+```
+```{r}
+participant_data = 
+  tibble(
+    files = list.files("data/data/"),
+    path = str_c("data/data/", files)
+  ) |>
+  mutate(
+    data = map(path, read_csv)
+  )
 
+participant_data
+```
 
+```{r}
+tidy_data = 
+  participant_data |>
+  unnest(cols = data) |>
+  mutate(
+    arm = str_sub(files, 1, 3),
+    subject_id = str_sub(files, 5, 6)
+  ) |>
+  pivot_longer(
+    week_1:week_8,
+    names_to = "week",
+    values_to = "observation",
+    names_prefix = "week_"
+  ) |>
+  mutate(
+    week = as.numeric(week)
+  ) |>
+  select(subject_id, arm, week, observation)
+
+tidy_data
+```
+
+```{r}
+tidy_data |>
+  ggplot(aes(x = week, y = observation,
+             group = subject_id, color = subject_id)) +
+  geom_line() +
+  facet_grid(~arm) +
+  labs(
+    title = "Observations Over Time by Group",
+    x = "Week",
+    y = "Observation",
+    color = "Subject ID"
+  ) +
+  theme_minimal()
+```
+
+The control group goes up and down over the eight weeks, but there is no clear overall trend. Most people in the experimental group show an increase over time. There are also differences between people within both groups.
 
 # Problem 3
+```{r}
+sim_t_test = function(mu) {
+  sim_data = tibble(
+    x = rnorm(30, mean = mu, sd = 5)
+  )
+  t.test(sim_data$x, mu = 0) |>
+    broom::tidy() |>
+    select(estimate, p.value)
+}
 
+sim_t_test(0)
+sim_t_test(3)
+```
 
+```{r}
+sim_results = 
+  expand_grid(
+    mu = 0:6,
+    iter = 1:5000
+  ) |>
+  mutate(
+    results = map(mu, sim_t_test)
+  ) |>
+  unnest(results)
+
+sim_results
+```
+
+```{r}
+power_results = 
+  sim_results |>
+  group_by(mu) |>
+  summarize(
+    power = mean(p.value < 0.05)
+  )
+
+power_results
+```
+
+```{r}
+power_results |>
+  ggplot(aes(x = mu, y = power)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Statistical Power by True Mean",
+    x = "True Mean",
+    y = "Power"
+  ) +
+  theme_minimal()
+```
+
+Power increases as the true mean gets larger. When mu = 0, about 5% of the tests reject the null hypothesis, which is close to the 0.05 significance level. Power is almost 1 when mu reaches 4.
+
+```{r}
+estimate_results = 
+  sim_results |>
+  group_by(mu) |>
+  summarize(
+    mean_estimate = mean(estimate)
+  )
+
+estimate_results
+```
+
+```{r}
+rejected_results = 
+  sim_results |>
+  filter(p.value < 0.05) |>
+  group_by(mu) |>
+  summarize(
+    mean_estimate = mean(estimate)
+  )
+
+rejected_results
+```
+
+```{r}
+estimate_results |>
+  ggplot(aes(x = mu, y = mean_estimate)) +
+  geom_line() +
+  geom_point() +
+  geom_line(aes(y = mu), linetype = "dashed") +
+  labs(
+    title = "Mean Estimate Across All Simulations",
+    x = "True Mean",
+    y = "Mean Estimate",
+    caption = "Dashed line represents the true mean"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+rejected_results |>
+  ggplot(aes(x = mu, y = mean_estimate)) +
+  geom_line() +
+  geom_point() +
+  geom_line(aes(y = mu), linetype = "dashed") +
+  labs(
+    title = "Mean Estimate Among Rejected Tests",
+    x = "True Mean",
+    y = "Mean Estimate",
+    caption = "Dashed line represents the true mean"
+  ) +
+  theme_minimal()
+```
+
+When all simulations are included, the average estimates are very close to the true mu values. But when I only look at tests with p-values below 0.05, the estimates are higher than the true values for small positive mu values. For example, the average estimate is about 2.26 when mu = 1. This happens because estimates farther from zero are more likely to give significant results. As mu gets larger, almost all tests are rejected, so the difference gets smaller. When mu = 0, significant estimates can be positive or negative, so their average is still close to 0.
